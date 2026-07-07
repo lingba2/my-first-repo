@@ -153,6 +153,10 @@
         <button class="dark-toggle" id="darkModeToggle">暗黑模式</button>
         <div class="mode-status" id="modeStatus">当前: 明亮模式</div>
         <!-- ================================= -->
+        <!-- 游戏入口按钮 -->
+        <button class="dark-toggle" id="gameBtn" style="margin-top:12px;">进入游戏</button>
+        <div style="margin-top:8px; font-size:0.85rem; color:#888;" id="gameStatus">点击按钮开始玩蟑螂躲避人</div>
+        <!-- ================================= -->
     </div>
 
     <script>
@@ -185,5 +189,199 @@
             });
         })();
     </script>
+
+    <!-- ========== 游戏区域（隐藏状态） ========== -->
+    <div id="gameArea" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#f0f2f5;overflow:auto;">
+    </div>
+
+<script>
+(function(){
+    var canvas = null;
+    var ctx = null;
+    var gameRunning = false;
+    var timer = null;
+    var anim = null;
+
+    var px = 400, py = 300, pr = 20;
+    var cx = 100, cy = 100, cr = 12;
+    var score = 0, timeLeft = 30;
+    var W = 800, H = 600;
+
+    var btn = document.getElementById('gameBtn');
+    var status = document.getElementById('gameStatus');
+    var area = document.getElementById('gameArea');
+    var backBtn = null;
+
+    if(!btn || !area) return;
+
+    btn.onclick = function(){
+        if(!canvas){
+            canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            canvas.style.display = 'block';
+            canvas.style.margin = '20px auto';
+            canvas.style.background = '#d4e8c2';
+            canvas.style.cursor = 'crosshair';
+            canvas.style.border = '3px solid #333';
+            canvas.style.borderRadius = '10px';
+            area.appendChild(canvas);
+
+            var infoDiv = document.createElement('div');
+            infoDiv.style.textAlign = 'center';
+            infoDiv.style.marginTop = '10px';
+            infoDiv.innerHTML = '<span id="sc" style="font-size:20px;font-weight:bold;margin-right:20px;">分数: 0</span><span id="tm" style="font-size:20px;font-weight:bold;margin-right:20px;">时间: 30</span><button id="bkBtn" style="padding:8px 20px;font-size:16px;border:2px solid #1a1a2e;background:transparent;border-radius:30px;cursor:pointer;">返回主页</button>';
+            area.appendChild(infoDiv);
+
+            backBtn = document.getElementById('bkBtn');
+            backBtn.onclick = function(){
+                endGame();
+                area.style.display = 'none';
+                status.textContent = '已返回主页';
+            };
+        } else {
+            canvas.width = W;
+            canvas.height = H;
+        }
+        ctx = canvas.getContext('2d');
+
+        area.style.display = 'block';
+
+        score = 0; timeLeft = 30;
+        px = 400; py = 300;
+        cx = 100; cy = 100;
+        document.getElementById('sc').textContent = '分数: 0';
+        document.getElementById('tm').textContent = '时间: 30';
+        status.textContent = '游戏中... 移动鼠标让人躲避蟑螂！';
+
+        gameRunning = true;
+        if(timer) clearInterval(timer);
+        timer = setInterval(function(){
+            timeLeft--;
+            var el = document.getElementById('tm');
+            if(el) el.textContent = '时间: ' + timeLeft;
+            if(timeLeft <= 0) endGame();
+        }, 1000);
+
+        if(anim) cancelAnimationFrame(anim);
+        loop();
+    };
+
+    document.addEventListener('mousemove', function(e){
+        if(!gameRunning || !canvas || area.style.display == 'none') return;
+        var r = canvas.getBoundingClientRect();
+        var sx = W / r.width;
+        var sy = H / r.height;
+        var nx = (e.clientX - r.left) * sx;
+        var ny = (e.clientY - r.top) * sy;
+        px = Math.max(pr, Math.min(W - pr, nx));
+        py = Math.max(pr, Math.min(H - pr, ny));
+    });
+
+    function loop(){
+        if(!gameRunning) return;
+
+        var dx = px - cx;
+        var dy = py - cy;
+        var d = Math.sqrt(dx*dx + dy*dy);
+        if(d > 0){
+            var sp = 1.8 + Math.random() * 1.2;
+            cx += (dx/d) * sp + (Math.random()-0.5);
+            cy += (dy/d) * sp + (Math.random()-0.5);
+        }
+        cx = Math.max(cr, Math.min(W - cr, cx));
+        cy = Math.max(cr, Math.min(H - cr, cy));
+
+        if(Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy)) < pr + cr){
+            endGame();
+            return;
+        }
+
+        score++;
+        var el = document.getElementById('sc');
+        if(el) el.textContent = '分数: ' + score;
+
+        draw();
+        anim = requestAnimationFrame(loop);
+    }
+
+    function draw(){
+        ctx.clearRect(0, 0, W, H);
+
+        // 网格
+        ctx.strokeStyle = '#b8d4a0';
+        ctx.lineWidth = 1;
+        for(var i=0;i<W;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+        for(var i=0;i<H;i+=40){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
+
+        // 人 - 蓝色身体
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI*2);
+        ctx.fillStyle = '#4a90d9';
+        ctx.fill();
+        ctx.strokeStyle = '#2c5f8a';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 头
+        ctx.beginPath();
+        ctx.arc(px, py-10, 10, 0, Math.PI*2);
+        ctx.fillStyle = '#f5cba7';
+        ctx.fill();
+        ctx.strokeStyle = '#2c5f8a';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 眼睛
+        ctx.fillStyle = '#333';
+        ctx.beginPath();ctx.arc(px-4, py-12, 2, 0, Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(px+4, py-12, 2, 0, Math.PI*2);ctx.fill();
+
+        // 蟑螂 - 棕色椭圆
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 14, 10, 0, 0, Math.PI*2);
+        ctx.fillStyle = '#8B4513';
+        ctx.fill();
+        ctx.strokeStyle = '#5C2E00';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 触须
+        ctx.beginPath();
+        ctx.moveTo(12, -4);
+        ctx.lineTo(22, -14);
+        ctx.strokeStyle = '#5C2E00';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(12, 4);
+        ctx.lineTo(22, 14);
+        ctx.stroke();
+
+        // 腿
+        for(var side=-1; side<=1; side+=2){
+            for(var j=0; j<3; j++){
+                ctx.beginPath();
+                ctx.moveTo(-4 + j*4, 8 * side);
+                ctx.lineTo(-8 + j*4, 16 * side);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+
+    function endGame(){
+        gameRunning = false;
+        if(timer) {clearInterval(timer); timer = null;}
+        if(anim) {cancelAnimationFrame(anim); anim = null;}
+        var el = document.getElementById('tm');
+        if(el) el.textContent = '时间: 0';
+        status.textContent = '游戏结束！点击按钮重新开始';
+    }
+})();
+</script>
+
 </body>
 </html>
